@@ -1,0 +1,10 @@
+(library
+  (name parser)
+  (public_name parser)
+  (libraries core fmt ast)
+  (preprocess
+    (pps bisect_ppx --conditional))
+ 
+  (ocamllex lexer)
+  (menhir (modules parser))
+

@@ -12,16 +12,23 @@ in
                 pos_lnum = pos.pos_lnum + 1
                 }
 }
+let unsigned = ['u' 'U']
+let hex = '0' ['x' 'X'] ['0'-'9' 'a'-'f' 'A'-'F']+
+let decimal = ['1'-'9'] ['0'-'9']*
+let octal = '0' ['0'-'7']*
 
 let digit = ['0'-'9']
-let alpha = ['a'-'z' 'A'-'Z']
 
-let int = '-'? digit? | 
-let id = (alpha) (alpha|digit|'_')*
+let id = ['a'-'z' 'A'-'Z' '_'] ['a'-'z' 'A'-'Z' '0'-'9' '_']*
+let int = decimal | hex | octal
+let uint = int unsigned
 let double = digit+ (['e' 'E'] ['+' '-']? digit+)? ['lf' 'Lf']? | ('.' digit+ | digit+ '.' digit?) 
 let float = digit+ (['e' 'E'] ['+' '-']? digit+)? ['f' 'F']? | ('.' digit+ | digit+ '.' digit?)
 let whitespace = [' ' '\t']+
 let newline = '\r' | '\n' | "\r\n"
+let macro_args = '(' (macro_args | [^ '(' ')']* ')'
+let single_line_comment = '//' (^newline)* newline
+let block_comment = '/*' (_*)? '*/'
 
 rule read_token = parse
         | "atomic_uint" { ATOMIC_UINT }
@@ -283,7 +290,9 @@ rule read_token = parse
         | newline { next_line lexbuf; read_token lexbuf }
         | eof { EOF }
         | _ { raise(SyntaxError("Lexing error; Illegal character: " ^ Lexing.lexeme lexbuf)) }
-
+    and read_macro = parse
+      | "define" { DEFINE }
+      |
     and read_single_line_comment = parse
       | newline { next_line lexbuf; read_token lexbuf }
       | eof { EOF }

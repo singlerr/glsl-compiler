@@ -5,30 +5,33 @@ open Parser
 exception SyntaxError of string
 
 let next_line lexbuf =
-        let pos = lexbuf.lex_curr_p
-in
+        let pos = lexbuf.lex_curr_p in
         lexbuf.lex_curr_p <-
-                { pos with pos_bol = lexbuf.lex_curr_pos;
+        { pos with pos_bol = lexbuf.lex_curr_pos;
                 pos_lnum = pos.pos_lnum + 1
-                }
+        }
 }
 let unsigned = ['u' 'U']
 let hex = '0' ['x' 'X'] ['0'-'9' 'a'-'f' 'A'-'F']+
 let decimal = ['1'-'9'] ['0'-'9']*
 let octal = '0' ['0'-'7']*
-
 let digit = ['0'-'9']
-
+let digit_sequence = digit+
+let double_suffix = ["lf" "LF"]
+let float_suffix = ['f' 'F']
+let int_suffix = ['u' 'U']
+let exponent_part = ['e' 'E'] ['+' '-']? digit_sequence
+let fractional = '.' digit_sequence | digit_sequence '.' digit_sequence?
 let id = ['a'-'z' 'A'-'Z' '_'] ['a'-'z' 'A'-'Z' '0'-'9' '_']*
 let int = decimal | hex | octal
 let uint = int unsigned
-let double = digit+ (['e' 'E'] ['+' '-']? digit+)? ['lf' 'Lf']? | ('.' digit+ | digit+ '.' digit?) 
-let float = digit+ (['e' 'E'] ['+' '-']? digit+)? ['f' 'F']? | ('.' digit+ | digit+ '.' digit?)
+let double = fractional exponent_part? double_suffix | digit_sequence exponent_part double_suffix
+let float = fractional exponent_part? float_suffix? | digit_sequence exponent_part float_suffix?
 let whitespace = [' ' '\t']+
 let newline = '\r' | '\n' | "\r\n"
 let macro_args = '(' (macro_args | [^ '(' ')']* ')'
-let single_line_comment = '//' (^newline)* newline
-let block_comment = '/*' (_*)? '*/'
+let single_line_comment = "//" (^newline)* newline
+let block_comment = "/*" (_*)? "*/"
 
 rule read_token = parse
         | "atomic_uint" { ATOMIC_UINT }
@@ -195,7 +198,7 @@ rule read_token = parse
         | "uimage3D" { UIMAGE3D }
         | "uimageBuffer" { UIMAGEBUFFER }
         | "uimageCube" { UIMAGECUBE }
-        | "uimageCubeArray" { UIMAGECUBEARRYA }
+        | "uimageCubeArray" { UIMAGECUBEARRAY }
         | "uint" { UINT }
         | "uniform" { UNIFORM }
         | "usam1D" { USAMPLER1D }
@@ -282,39 +285,66 @@ rule read_token = parse
         | double { DOUBLE }
         | float { FLOAT }
         | whitespace { read_token lexbuf }
-        | "//" { read_single_line_comment lexbuf }
-        | "/*" { read_multi_line_comment lexbuf }
+        | "//" (^newline)* "//" 
+        | "/*" ([^ "*/"])* "*/"
         | int { INT(int_of_string (Lexing.lexeme lexbuf)) }
         | id { ID (Lexing.lexeme lexbuf ) }
-        | '"' { read_string(Buffer.create 17) lexbuf }
         | newline { next_line lexbuf; read_token lexbuf }
         | eof { EOF }
         | _ { raise(SyntaxError("Lexing error; Illegal character: " ^ Lexing.lexeme lexbuf)) }
-    and read_macro = parse
-      | "define" { DEFINE }
-      |
-    and read_single_line_comment = parse
-      | newline { next_line lexbuf; read_token lexbuf }
-      | eof { EOF }
-      | _ { read_single_line_comment lexbuf }
-    and read_multi_line_comment = parse
-      | "*/" { read_token lexbuf }
-      | newline { next_line lexbuf; read_multi_line_comment lexbuf }
-      | eof { raise(SyntaxError("Lexing error; Unexpected EOF")) }
-      | _ { read_multi_line_comment lexbuf }
-    and read_string buf = parse
-      | '"' { STRING(Buffer.contents buf) }
-      | '\\' '/' { Buffer.add_char buf '/'; read_string buf lexbuf }
-      | '\\' '\\' { Buffer.add_char buf '\\'; read_string buf lexbuf }
-      | '\\' 'b' { Buffer.add_char buf '\b'; read_string buf lexbuf }
-      | '\\' 'f' { Buffer.add_char buf '\012'; read_string buf lexbuf }
-      | '\\' 'n' { Buffer.add_char buf '\n'; read_string buf lexbuf }
-      | '\\' 'r' { Buffer.add_char buf '\r'; read_string buf lexbuf }
-      | '\\' 't' { Buffer.add_char buf '\t'; read_string buf lexbuf }
-      | [^ '"' '\\']+
-        { Buffer.add_string buf (Lexing.lexeme lexbuf);
-          read_string buf lexbuf
-        }
-      | _ { raise (SyntaxError("Illegal string character: " ^ Lexing.lexeme lexbuf)) }
-      | eof { raise (SyntaxError("String is not terminated")) }
+  and parse_directive = parse
+    | "define" { parse_define_directive lexbuf }
+    | "elif" { parse_elif_directive lexbuf }
+    | "else" { ELSE_DIRECTIVE }
+    | "endif" { ENDIF_DIRECTIVE }
+    | "error" { parse_error_directive lexbuf }
+    | "extension" { parse_extension_directive lexbuf }
+    | "if" { parse_if_directive lexbuf }
+    | "ifdef" { parse_ifdef_directive lexbuf }
+    | "ifndef" { parse_ifdef_directive lexbuf }
+    | "line" { parse_line_directive lexbuf }
+    | "pragma" { parse_pragma_directive lexbuf }
+    | "undef" { parse_undef_directive lexbuf }
+    | "version" { parse_version_directive lexbuf }
+  and parse_define_directive = parse
+    | (id as dir_id) (macro_args? as dir_args) { MACRO_TEXT(dir_id * dir_args) }
+    | newline
+    | whitespace
+  and parse_elif_directive = parse
+    | (^newline)+ { CONSTANT_EXPR(Lexing.lexeme lexbuf) }
+    | newline
+  and parse_extension_directive = parse
+    | ("require" | "enable" | "warn" | "disable") { BEHAVIOUR(Lexing.lexeme lexbuf) }
+    | ";"
+    | id { EXTENSION_NAME(Lexing.lexeme lexbuf) }
+    | newline
+    | whitespace
+  and parse_error_directive = parse
+    | (^newline)+ { ERROR(Lexing.lexeme lexbuf) }
+    | newline
+  and parse_if_directive = parse
+    | (^newline)+ { CONSTANT_EXPR(Lexing.lexeme lexbuf) }
+    | newline
+  and parse_ifdef_directive = parse
+    | id { MACRO_ID(Lexing.lexeme lexbuf) }
+    | newline
+  and parse_line_directive = parse
+    | (^newline)+ { LINE_EXPR(Lexing.lexeme lexbuf) }
+    | newline
+  and parse_pragma_directive = parse
+    | "debug" { DEBUG }
+    | "(" { LEFT_PAREN }
+    | ")" { RIGHT_PAREN }
+    | "off" { OFF }
+    | "on" { ON }
+    | "optimize" { OPTIMIZE }
+    | "stdgl" { STDGL }
+    | newline
+    | whitespace
+  and parse_version_directive = parse
+    | digit+ { NUMBER(int_of_string (Lexing.lexeme lexbuf)) }
+    | "core" | "compatibility" | "es" { PROFILE(Lexing.lexeme lexbuf) }
+    | newline
+    | whitespace
+
 

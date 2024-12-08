@@ -1,5 +1,6 @@
 %{
-open Printf
+open Ast.Ast_types
+open Parsed_ast
 %}
 
 %token <int> INT
@@ -70,7 +71,7 @@ open Printf
 %token ISAMPLER2DMSARRAY
 %token ISAMPLER2DRECT
 %token ISAMPLER3D
-%otken ISAMPLERBUFFER
+%token ISAMPLERBUFFER
 %token ISAMPLERCUBE
 %token ISAMPLERCUBEARRAY
 %token ISUBPASSINPUT
@@ -245,4 +246,50 @@ open Printf
 %left AND_OP OR_OP XOR_OP
 %nonassoc BANG
 
+%%
 
+translation_unit:
+  | compiler_directive = compiler_directive*
+
+compiler_directive:
+  | define_directive
+  | elif_directive
+  | else_directive
+  | endif_directive
+  | error_directive
+  | extension_directive
+  | if_directive
+  | ifdef_directive
+  | ifndef_directive
+  | line_directive
+  | pragma_directive
+  | undef_directive
+  | version_directive
+
+behaviour:
+  | BEHAVIOUR
+
+constant_expression:
+  | CONSTANT_EXPR
+
+define_directive:
+  | NUMBER_SIGN DEFINE macro_name macro_text
+
+elif_directive:
+  | NUMBER_SIGN ELIF constant_expression group_of_lines
+
+else_directive:
+  | NUMBER_SIGN ELSE_DIRECTIVE group_of_lines
+
+endif_directive:
+  | NUMBER_SIGN ENDIF_DIRECTIVE
+
+error_directive:
+  | NUMBER_SIGN ERROR_DIRECTIVE error_message
+
+error_message:
+  | ERROR_MESSAGE
+
+extension_directive:
+  | NUMBER_SIGN EXTENSION_DIRECTIVE extension_name COLON behaviour
+  

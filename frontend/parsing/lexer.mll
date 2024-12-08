@@ -346,5 +346,3 @@ rule read_token = parse
     | "core" | "compatibility" | "es" { PROFILE(Lexing.lexeme lexbuf) }
     | newline
     | whitespace
-
-

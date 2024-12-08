@@ -214,7 +214,7 @@ let string_of_type = function
   | TE_IIMAGE2DARRAY -> "iimage2DArray"
   | TE_IIMAGE2DMS -> "iimage2DMS"
   | TE_IIMAGE2DMSARRAY -> "iimagd2DMSArray"
-  | TE_IIMAGE2DRECT -? "iimage2DRect"
+  | TE_IIMAGE2DRECT -> "iimage2DRect"
   | TE_IIMAGE3D -> "iimage3D"
   | TE_IIMAGEBUFFER -> "iimageBuffer"
   | TE_IIMAGECUBE -> "iimageCube"
@@ -350,7 +350,7 @@ type param =
   | TParam of type_expr * Var_name.t
 
 let get_params_types params =
-  List.map ~f:(fun (TParam (param_type, _, _, _)) -> param_type) params
+  List.map ~f:(fun (TParam (param_type, _)) -> param_type) params
 
 type bin_op = 
   | BinOpPlus

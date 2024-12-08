@@ -1,6 +1,5 @@
 (library
   (name ast)
-  (public_name ast)
   (libraries core fmt)
   (preprocess
     (pps bisect_ppx --conditional))

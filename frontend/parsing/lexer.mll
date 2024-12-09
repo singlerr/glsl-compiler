@@ -311,25 +311,25 @@ rule read_token = parse
     | newline
     | whitespace
   and parse_elif_directive = parse
-    | (^newline)+ { CONSTANT_EXPR(Lexing.lexeme lexbuf) }
+    | (^newline)+ { ELIF_DIRECTIVE(Lexing.lexeme lexbuf) }
     | newline
   and parse_extension_directive = parse
     | ("require" | "enable" | "warn" | "disable") { BEHAVIOUR(Lexing.lexeme lexbuf) }
     | ";"
-    | id { EXTENSION_NAME(Lexing.lexeme lexbuf) }
+    | id { EXTENSION_DIRECTIVE(Lexing.lexeme lexbuf) }
     | newline
     | whitespace
   and parse_error_directive = parse
-    | (^newline)+ { ERROR(Lexing.lexeme lexbuf) }
+    | (^newline)+ { ERROR_DIRECTIVE(Lexing.lexeme lexbuf) }
     | newline
   and parse_if_directive = parse
-    | (^newline)+ { CONSTANT_EXPR(Lexing.lexeme lexbuf) }
+    | (^newline)+ { IF_DIRECTIVE(Lexing.lexeme lexbuf) }
     | newline
   and parse_ifdef_directive = parse
-    | id { MACRO_ID(Lexing.lexeme lexbuf) }
+    | id { IFDEF_DIRECTIVE(Lexing.lexeme lexbuf) }
     | newline
   and parse_line_directive = parse
-    | (^newline)+ { LINE_EXPR(Lexing.lexeme lexbuf) }
+    | (^newline)+ { LINE_DIRECTIVE(Lexing.lexeme lexbuf) }
     | newline
   and parse_pragma_directive = parse
     | "debug" { DEBUG }

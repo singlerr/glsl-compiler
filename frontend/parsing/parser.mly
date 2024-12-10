@@ -16,6 +16,7 @@ open Parsed_ast
 %token COHERENT
 %token CONTINUE
 %token CONSTANT_EXPR
+%token DEBUG
 %token DEFAULT
 %token DEFINE
 %token DISCARD
@@ -35,7 +36,7 @@ open Parsed_ast
 %token DOUBLE
 %token DVEC2
 %token DVEC3
-%token DEVC4
+%token DVEC4
 %token ELSE
 %token ELIF
 %token FALSE
@@ -58,6 +59,8 @@ open Parsed_ast
 %token IMAGE1DARRAY
 %token IMAGE2D
 %token IMAGE2DARRAY
+%token IMAGE2DMSARRAY
+%token IMAGE2DMS
 %token IMAGE2DRECT
 %token IMAGE3D
 %token IMAGEBUFFER
@@ -95,6 +98,7 @@ open Parsed_ast
 %token IVEC4
 %token LAYOUT
 %token LOWP
+%token MACRO_TEXT
 %token MAT2
 %token MAT2X2
 %token MAT2X3
@@ -109,6 +113,8 @@ open Parsed_ast
 %token MAT4X4
 %token MEDIUMP
 %token NOPERSPECTIVE
+%token OFF
+%token ON
 %token OUT
 %token PATCH
 %token PRECISE
@@ -139,6 +145,7 @@ open Parsed_ast
 %token SHARED
 %token SMOOTH
 %token STRUCT
+%token SUB_ASSIGN
 %token SUBPASSINPUT
 %token SUBPASSINPUTMS
 %token SUBROUTINE
@@ -272,14 +279,14 @@ compiler_directive:
 behaviour:
   | BEHAVIOUR {}
 
-constant_expression:
+constant_expression_directive:
   | CONSTANT_EXPR {}
 
 define_directive:
   | NUMBER_SIGN DEFINE macro_name macro_text {}
 
 elif_directive: 
-  | NUMBER_SIGN ELIF constant_expression group_of_lines {}
+  | NUMBER_SIGN ELIF constant_expression_directive group_of_lines {}
 
 else_directive:
   | NUMBER_SIGN ELSE_DIRECTIVE group_of_lines {}
@@ -297,10 +304,13 @@ extension_directive:
   | NUMBER_SIGN EXTENSION_DIRECTIVE extension_name COLON behaviour {}
 
 group_of_lines:
-  | (program_text | compiler_directive)*
+  | list(group_of_lines_) {}
 
+group_of_lines_:
+  | program_text 
+  | compiler_directive {}
 if_directive:
-  | NUMBER_SIGN IF_DIRECTIVE constant_expression group_of_lines elif_directive* else_directive? endif_directive {}
+  | NUMBER_SIGN IF_DIRECTIVE constant_expression_directive group_of_lines elif_directive* else_directive? endif_directive {}
 
 ifdef_directive:
   | NUMBER_SIGN IFDEF_DIRECTIVE macro_identifier group_of_lines elif_directive* else_directive? endif_directive {}
@@ -318,13 +328,19 @@ macro_name:
   | MACRO_NAME {}
 
 macro_text:
-  | (macro_text_ | macro_esc_newline)* {}
+  | list(macro_val) {}
+
+macro_val:
+  | macro_text_
+  | macro_esc_newline {}
 
 macro_text_:
   | MACRO_TEXT {}
 
 number:
-  | NUMBER {}
+  | INT
+  | FLOAT
+  | DOUBLE {}
 
 off:
   | OFF {}
@@ -333,10 +349,19 @@ on:
   | ON {}
 
 pragma_debug:
-  | DEBUG LEFT_PAREN (on | off) RIGHT_PAREN {}
+  | DEBUG LEFT_PAREN pragma_debug_ RIGHT_PAREN {}
+
+pragma_debug_:
+  | on
+  | off {}
 
 pragma_directive:
-  | NUMBER_SIGN PRAGMA_DIRECTIVE (stdgl | pragma_debug | pragma_optimize) {}
+  | NUMBER_SIGN PRAGMA_DIRECTIVE pragma_directive_ {}
+
+pragma_directive_:
+  | stdgl
+  | pragma_debug
+  | pragma_optimize {}
 
 profile:
   | PROFILE {}
@@ -387,7 +412,7 @@ function_identifier:
   | postfix_expression {}
 
 function_call_parameters:
-  | assignment_expression (COMMA assignment_expression)*
+  | assignment_expression separated_list(COMMA, assignment_expression)
   | VOID {}
 
 unary_expression:
@@ -421,17 +446,40 @@ assignment_operator:
 
 binary_expression:
   | unary_expression
-  | binary_expression (STAR | SLASH | PERCENT) binary_expression
-  | binary_expression (PLUS | DASH) binary_expression
-  | binary_expression (LEFT_OP | RIGHT_OP) binary_expression
-  | binary_expression (LEFT_ANGLE | RIGHT_ANGLE | LE_OP | RE_OP) binary_expression
-  | binary_expression (EQ_OP | NE_OP) binary_expression
+  | binary_expression first_prec_op binary_expression
+  | binary_expression second_prec_op binary_expression
+  | binary_expression comp_op binary_expression
+  | binary_expression comp_branch_op binary_expression
+  | binary_expression eq_comp_branch_op binary_expression
   | binary_expression AMPERSAND binary_expression
   | binary_expression CARET binary_expression
   | binary_expression VERTICAL_BAR binary_expression
   | binary_expression AND_OP binary_expression
   | binary_expression XOR_OP binary_expression
   | binary_expression OR_OP binary_expression {}
+
+first_prec_op:
+  | STAR
+  | SLASH
+  | PERCENT {}
+
+second_prec_op:
+  | PLUS
+  | DASH {}
+
+comp_op:
+  | LEFT_OP
+  | RIGHT_OP {}
+
+comp_branch_op:
+  | LEFT_ANGLE
+  | RIGHT_ANGLE 
+  | LE_OP 
+  | RE_OP {}
+
+eq_comp_branch_op:
+  | EQ_OP
+  | NE_OP {}
 
 expression:
   | assignment_expression
@@ -446,23 +494,30 @@ declaration:
   | init_declarator_list SEMICOLON
   | PRECISION precision_qualifier type_specifier SEMICOLON
   | type_qualifier IDENTIFIER LEFT_BRACE struct_declaration_list RIGHT_BRACE
-    (IDENTIFIER array_specifier?)? SEMICOLON
-  | type_qualifier identifier_list? SEMICOLON {}
+    option(declaration_) SEMICOLON
+  | type_qualifier option(identifier_list) SEMICOLON {}
+
+declaration_:
+  | IDENTIFIER option(array_specifier) {}
 
 identifier_list:
-  : IDENTIFIER (COMMA IDENTIFIER)* {}
+  | IDENTIFIER separated_list(COMMA, IDENTIFIER) {}
 
 function_prototype:
-  | fully_specified_type IDENTIFIER LEFT_PAREN function_parameters? RIGHT_PAREN {}
+  | fully_specified_type IDENTIFIER LEFT_PAREN option(function_parameters) RIGHT_PAREN {}
 
 function_parameters:
-  | parameter_declaration (COMMA parameter_declaration)* {}
+  | parameter_declaration separated_list(COMMA, parameter_declaration) {}
 
 parameter_declarator:
-  | type_specifier IDENTIFIER array_specifier? {}
+  | type_specifier IDENTIFIER option(array_specifier) {}
 
 parameter_declaration:
-  | type_qualifier (parameter_declarator | parameter_type_specifier)
+  | type_qualifier parameter_type_
+  | parameter_declarator
+  | parameter_type_specifier {}
+
+parameter_type_:
   | parameter_declarator
   | parameter_type_specifier {}
 
@@ -470,13 +525,16 @@ parameter_type_specifier:
   | type_specifier {}
 
 init_declarator_list:
-  | single_declaration (COMMA typeless_declaration)* {}
+  | single_declaration separated_list(COMMA, typeless_declaration) {}
 
 single_declaration:
-  | fully_specified_type typeless_declaration? {}
+  | fully_specified_type option(typeless_declaration) {}
 
 typeless_declaration:
-  | IDENTIFIER array_specifier? (EQUAL initializer)? {}
+  | IDENTIFIER option(array_specifier) option(typeless_declaration_) {}
+
+typeless_declaration_:
+  | EQUAL initializer_ {}
 
 fully_specified_type:
   | type_specifier
@@ -494,11 +552,14 @@ layout_qualifier:
   | LAYOUT LEFT_PAREN layout_qualifier_id_list RIGHT_PAREN {}
 
 layout_qualifier_id_list:
-  | layout_qualifier_id (COMMA layout_qualifier_id)* {}
+  | layout_qualifier_id separated_list(COMMA, layout_qualifier_id) {}
 
 layout_qualifier_id:
-  | IDENTIFIER (EQUAL constant_expression)?
+  | IDENTIFIER option(layout_qualifier_id_)
   | SHARED {}
+
+layout_qualifier_id_:
+  | EQUAL constant_expression {}
 
 precise_qualifier:
   | PRECISE {}
@@ -530,24 +591,27 @@ storage_qualifier:
   | RESTRICT
   | READONLY
   | WRITEONLY
-  | SUBROUTINE (LEFT_PAREN type_name_list RIGHT_PAREN)?
+  | SUBROUTINE option(subroutine_)
   | ATTRIBUTE
-  | VARING {}
+  | VARYING {}
+
+subroutine_:
+  | LEFT_PAREN type_name_list RIGHT_PAREN {}
 
 type_name_list:
-  | type_name (COMMA type_name)* {}
+  | type_name separated_list(COMMA, type_name) {}
 
 type_name:
   | IDENTIFIER {}
 
 type_specifier:
-  | type_specifier_nonarray array_specifier? {}
+  | type_specifier_nonarray option(array_specifier) {}
 
 array_specifier:
   | dimension+ {}
 
 dimension:
-  | LEFT_BRACKET constant_expression? RIGHT_BRACKET {}
+  | LEFT_BRACKET option(constant_expression) RIGHT_BRACKET {}
 
 type_specifier_nonarray:
     | VOID
@@ -670,7 +734,7 @@ type_specifier_nonarray:
     | IIMAGE2DMSARRAY
     | UIMAGE2DMSARRAY
     | struct_specifier
-    | type_name
+    | type_name {}
 
 precision_qualifier:
   | HIGHP
@@ -688,12 +752,12 @@ struct_declaration:
   | type_qualifier type_specifier struct_declarator_list SEMICOLON {}
 
 struct_declarator_list:
-  | struct_declarator (COMMA struct_declarator)* {}
+  | struct_declarator separated_list(COMMA, struct_declarator) {}
 
 struct_declarator:
   | IDENTIFIER array_specifier? {}
 
-initializer:
+initializer_:
   | assignment_expression
   | LEFT_BRACE initializer_list COMMA? RIGHT_BRACE {}
 
@@ -734,11 +798,14 @@ selection_statement:
   | IF LEFT_PAREN expression RIGHT_PAREN selection_rest_statement {}
 
 selection_rest_statement:
-  | statement (ELSE statement)? {}
+  | statement option(selection_rest_statement_) {}
+
+selection_rest_statement_:
+  | ELSE statement {}
 
 condition:
   | expression
-  | fully_specified_type IDENTIFIER EQUAL initializer {}
+  | fully_specified_type IDENTIFIER EQUAL initializer_ {}
 
 switch_statement:
   | SWITCH LEFT_PAREN expression RIGHT_PAREN LEFT_BRACE statement_list? RIGHT_BRACE {}

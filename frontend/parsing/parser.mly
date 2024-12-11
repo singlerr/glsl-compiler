@@ -5,6 +5,8 @@ open Parsed_ast
 
 %token <int> INT
 %token ATOMIC_UINT
+%token ATTRIBUTE
+%token BEHAVIOUR
 %token BOOL
 %token BREAK
 %token BUFFER
@@ -16,6 +18,7 @@ open Parsed_ast
 %token COHERENT
 %token CONTINUE
 %token CONSTANT_EXPR
+%token CONST
 %token DEBUG
 %token DEFAULT
 %token DEFINE
@@ -38,16 +41,26 @@ open Parsed_ast
 %token DVEC3
 %token DVEC4
 %token ELSE
+%token ELSE_DIRECTIVE
 %token ELIF
+%token ENDIF_DIRECTIVE
+%token EXTENSION_DIRECTIVE
+%token ERROR_MESSAGE
+%token ERROR_DIRECTIVE
 %token FALSE
 %token FLAT
 %token FLOAT
 %token FOR
 %token HIGHP
+%token IDENTIFIER
 %token IF
+%token IF_DIRECTIVE
+%token IFDEF_DIRECTIVE
+%token IFNDEF_DIRECTIVE
 %token IIMAGE1D
 %token IIMAGE1DARRAY
 %token IIMAGE2D
+%token IIMAGE2DMS
 %token IIMAGE2DARRAY
 %token IIMAGE2DMSARRAY
 %token IIMAGE2DRECT
@@ -97,8 +110,14 @@ open Parsed_ast
 %token IVEC3
 %token IVEC4
 %token LAYOUT
+%token LEFT_PAREN
+%token LINE_DIRECTIVE
+%token LINE_EXPRESSION
 %token LOWP
+%token MACRO_ESE_NEWLINE
+%token MACRO_IDENTIFIER
 %token MACRO_TEXT
+%token MACRO_NAME
 %token MAT2
 %token MAT2X2
 %token MAT2X3
@@ -113,12 +132,17 @@ open Parsed_ast
 %token MAT4X4
 %token MEDIUMP
 %token NOPERSPECTIVE
+%token NUMBER
 %token OFF
 %token ON
+%token OPTIMIZE
 %token OUT
 %token PATCH
+%token PRAGMA_DIRECTIVE
 %token PRECISE
 %token PRECISION
+%token PROFILE
+%token PROGRAM_TEXT
 %token READONLY
 %token RESTRICT
 %token RETURN
@@ -127,6 +151,7 @@ open Parsed_ast
 %token SAMPLER1D
 %token SAMPLER1DARRAY
 %token SAMPLER1DARRAYSHADOW
+%token SAMPLER1DSHADOW
 %token SAMPLER2D
 %token SAMPLER2DARRAY
 %token SAMPLER2DARRAYSHADOW
@@ -174,6 +199,7 @@ open Parsed_ast
 %token UIMAGECUBE
 %token UIMAGECUBEARRAY
 %token UINT
+%token UNDEF_DIRECTIVE
 %token UNIFORM
 %token USAMPLER1D
 %token USAMPLER1DARRAY
@@ -206,6 +232,7 @@ open Parsed_ast
 %token VEC2
 %token VEC3
 %token VEC4
+%token VERSION_DIRECTIVE
 %token VOID
 %token VOLATILE
 %token WHILE
@@ -238,15 +265,25 @@ open Parsed_ast
 %token NUMBER_SIGN
 %token OR_ASSIGN
 %token QUESTION
+%token RE_OP
 %token RIGHT_ASSIGN
 %token RIGHT_BRACE
 %token RIGHT_BRACKET
 %token RIGHT_OP
 %token RIGHT_PAREN
 %token SEMICOLON
+%token STDGL
 %token TILDE
 %token VERTICAL_BAR
 %token XOR_ASSIGN
+%token XOR_OP
+%token OR_OP
+%token LEFT_ANGLE
+%token RIGHT_ANGLE
+%token PLUS
+%token SLASH
+%token STAR
+%token PERCENT
 
 %right EQUAL
 %left PLUS DASH LEFT_ANGLE RIGHT_ANGLE
@@ -254,9 +291,12 @@ open Parsed_ast
 %left AND_OP OR_OP XOR_OP
 %nonassoc BANG
 
+%start translation_unit
 %%
 
 // ---------------------------------- preprocess
+
+
 translation_unit:
   | compiler_directive {}
 
@@ -303,6 +343,9 @@ error_message:
 extension_directive:
   | NUMBER_SIGN EXTENSION_DIRECTIVE extension_name COLON behaviour {}
 
+extension_name:
+  | EXTENSION_DIRECTIVE {}
+
 group_of_lines:
   | list(group_of_lines_) {}
 
@@ -321,6 +364,12 @@ ifndef_directive:
 line_directive:
   | NUMBER_SIGN LINE_DIRECTIVE line_expression {}
 
+line_expression:
+  | LINE_EXPRESSION {}
+
+macro_identifier:
+  | MACRO_IDENTIFIER {}
+
 macro_esc_newline:
   | MACRO_ESE_NEWLINE {}
 
@@ -338,15 +387,20 @@ macro_text_:
   | MACRO_TEXT {}
 
 number:
-  | INT
-  | FLOAT
-  | DOUBLE {}
+  | NUMBER {}
 
 off:
   | OFF {}
 
 on:
   | ON {}
+
+pragma_optimize:
+  | OPTIMIZE LEFT_PAREN pragma_optimize_ RIGHT_PAREN {} 
+
+pragma_optimize_:
+  | on
+  | off {}
 
 pragma_debug:
   | DEBUG LEFT_PAREN pragma_debug_ RIGHT_PAREN {}
@@ -399,13 +453,19 @@ postfix_expression:
   | postfix_expression LEFT_BRACKET integer_expression RIGHT_BRACKET
   | postfix_expression LEFT_PAREN function_call_parameters? RIGHT_PAREN
   | type_specifier LEFT_PAREN function_call_parameters? RIGHT_PAREN
-  | postfix_expression DOT field_expression
+  | postfix_expression DOT field_selection
   | postfix_expression INC_OP
   | postfix_expression DEC_OP {}
 
 field_selection:
   | variable_identifier
   | function_call {}
+
+integer_expression:
+  | expression {}
+
+function_call:
+  | function_identifier LEFT_PAREN function_call_parameters? RIGHT_PAREN {}
 
 function_identifier:
   | type_specifier
@@ -760,6 +820,9 @@ struct_declarator:
 initializer_:
   | assignment_expression
   | LEFT_BRACE initializer_list COMMA? RIGHT_BRACE {}
+
+initializer_list:
+  | initializer_ separated_list(COMMA, initializer_) {}
 
 declaration_statement:
   | declaration {}
